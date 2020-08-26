@@ -1,17 +1,25 @@
-﻿namespace WebManageComputerNadyaHome
+﻿using System.IO;
+using System.Text;
+
+namespace WebManageComputerNadyaHome
 {
     using System;
     using System.Linq;
 
     public partial class _Default : System.Web.UI.Page
     {
+        protected void Page_PreInit(object sender, EventArgs e)
+        {
+
+        }
+
         protected void Page_Load(object sender, EventArgs e)
         {
             string errorText = null;
             string status = null;
 
             //текст справки, адаптированный к текущему адресу
-            var thisUrl = this.ResolveUrl(".");
+            var thisUrl = this.Request.Url.AbsolutePath;
             var helpResponse = String.Format(@"Help:
 Краткие сведения:
 ====================================================================================================
@@ -36,11 +44,11 @@
 =====================================================================================================
 \t{0}?set=1  - установить значение в 1
 \t{0}?set=0  - сбросить значение в 0
-\t{0}?get  - прочитать текущее значение 0 или 1 (ранее установленное через set) и вернуть в ответ
+\t{0}?get=true  - прочитать текущее значение 0 или 1 (ранее установленное через set) и вернуть в ответ
 
 Возможные ответы:
 =====================================================================================================
-\t1) 1, 0 - значение, ранее установленное по set и запрошенное сейчас по get
+\t1) 1, 0 - значение, ранее установленное по set и запрошенное сейчас по get=true
 \t1) Help:... - справка
 \t2) Error:... - что то пошло не так :)
 
@@ -49,39 +57,69 @@
             try
             {
                 //в ответ пишем чистый текст
-                Response.Clear();
+                Response.ClearContent();
                 Response.ClearHeaders();
                 Response.AddHeader("Content-Type", "text/plain");
 
-                bool helpCommandExists = Request.Params.AllKeys.Contains("help", StringComparer.InvariantCultureIgnoreCase) ||
-                                         Request.Params.AllKeys.Length == 0;
-
+                bool helpCommandExists = Request.Params.AllKeys.Contains("help", StringComparer.InvariantCultureIgnoreCase);
                 if (helpCommandExists)
                 {
                     Response.Write(helpResponse);
                     return;
                 }
 
+                //тестирование всех ключей
+                //StringBuilder sb = new StringBuilder();
+                //foreach (var key in Request.Params.AllKeys)
+                //{
+                //    sb.AppendLine(key);
+                //}
+                //Response.Write(sb.ToString());
+                //return;
+
+
                 //отработаем команду set
                 bool setCommandExists = Request.Params.AllKeys.Contains("set");
                 if (setCommandExists)
                 {
                     string setCommand = Request.Params.Get("set");
+
+                    //Response.Write(setCommand);
+                    //return;
                     if (setCommand != "1" && setCommand != "0")
                     {
                         //некорректное значение передали, направим на справку
                         Response.Write(helpResponse);
                         return;
                     }
+
+                    //установим состояние
+                    var stateFileFullPath = GetFullPathForStateFile();
+                    File.WriteAllText(stateFileFullPath, setCommand);
+                    Response.Write(File.ReadAllText(stateFileFullPath));
+                    return;
                 }
 
                 //отработаем команду get
                 bool getCommandExists = Request.Params.AllKeys.Contains("get");
                 if (getCommandExists)
                 {
-                    var thisFolder = Server.MapPath(this.ResolveUrl("."));
-                    Response.Write(thisFolder);
-                    return;
+                    //var thisFolder = Server.MapPath(this.ResolveUrl("."));
+                    ////Response.Write("Путь:" + thisFolder);
+                    //var stateTxt = Path.Combine(thisFolder,"state.txt");
+
+                    var stateFileFullPath = GetFullPathForStateFile();
+                    if (!File.Exists(stateFileFullPath))
+                    {
+                        Response.Write("0");
+                        return;
+                    }
+
+                    var text = File.ReadAllText(stateFileFullPath);
+                    {
+                        Response.Write(text);
+                        return;
+                    }
                 }
 
                 //на все остальные команды возвращаем help
@@ -98,6 +136,13 @@
                 Response.Flush();
                 Response.End();
             }
+        }
+
+        private string GetFullPathForStateFile()
+        {
+            var thisFolder = Server.MapPath(this.ResolveUrl("."));
+            var stateTxt = Path.Combine(thisFolder, "state.txt");
+            return stateTxt;
         }
     }
 }
